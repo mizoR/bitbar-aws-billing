@@ -21,17 +21,28 @@ module BitBar
         @period     = period
         @metric     = metric
         @cloudwatch = cloudwatch
+        @statistics = {}
       end
 
       def sum
+        if @statistics.key?(:sum)
+          return @statistics.fetch(:sum)
+        end
+
+        @statistics[:sum] = get_sum
+      end
+
+      private
+
+      def get_sum
         params = build_params.merge(statistics: 'Sum')
 
         statistics = @cloudwatch.get_metric_statistics(params)
 
-        statistics.fetch(0).fetch('Sum')
+        if statistics.size > 0
+          statistics.fetch(0).fetch('Sum')
+        end
       end
-
-      private
 
       def build_params
         {
@@ -146,8 +157,8 @@ module BitBar
         period     = (end_time - start_time).to_i
 
         metrics = cloudwatch.list_metrics(
-          namespace:   'AWS/Billing',
-          dimensions:  [ { Name: 'Currency', Value: 'USD' } ],
+          namespace:    'AWS/Billing',
+          dimensions:   [ { Name: 'Currency', Value: 'USD' } ],
           metric_name: 'EstimatedCharges',
         )
 
@@ -160,7 +171,9 @@ module BitBar
             period:     period,
           )
 
-          hash[service_name] = statistics.sum
+          if statistics.sum
+            hash[service_name] = statistics.sum
+          end
         end
 
         render(start_time: start_time, end_time: end_time, sums: sums)
@@ -175,7 +188,7 @@ module BitBar
           #{start_time.to_date} ~ #{end_time.to_date} | color=grey font=Menlo-Bold
           #{sums.map { |name, sum| "#{name.ljust(18)} $#{sum} | color=grey font=Menlo" }.join("\n") }
           ---
-          Open Billing | href=https://console.aws.amazon.com/billing/home font=Menlo
+          Open Bills | href=https://console.aws.amazon.com/billing/home?#/bills font=Menlo
         VIEW
       end
 
